@@ -22,10 +22,6 @@ const zoomOutButton = document.querySelector("#zoom-out");
 const zoomResetButton = document.querySelector("#zoom-reset");
 const downloadPdfButton = document.querySelector("#download-pdf");
 
-const DATABASE_NAME = "familyTreeDatabase";
-const DATABASE_VERSION = 1;
-const STORE_NAME = "appState";
-const STATE_KEY = "familytree-framework-members";
 let nextMemberId = 1;
 const familyMembers = [];
 let treeZoom = 1;
@@ -148,104 +144,72 @@ function findMemberById(id) {
   return familyMembers.find((member) => member.id === id) || null;
 }
 
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
 
-    request.addEventListener("upgradeneeded", () => {
-      const database = request.result;
+  if (!response.ok) {
+    let errorMessage = `请求失败: ${response.status}`;
 
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: "key" });
+    try {
+      const errorPayload = await response.json();
+      if (errorPayload?.error) {
+        errorMessage = errorPayload.error;
       }
-    });
+    } catch (error) {
+      // Keep the fallback status message.
+    }
 
-    request.addEventListener("success", () => {
-      resolve(request.result);
-    });
+    throw new Error(errorMessage);
+  }
 
-    request.addEventListener("error", () => {
-      reject(request.error || new Error("数据库打开失败"));
-    });
-  });
-}
-
-async function readStateFromDatabase() {
-  const database = await openDatabase();
-
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readonly");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.get(STATE_KEY);
-
-    request.addEventListener("success", () => {
-      resolve(request.result?.value || null);
-    });
-
-    request.addEventListener("error", () => {
-      reject(request.error || new Error("数据库读取失败"));
-    });
-  });
+  return response.json();
 }
 
 async function writeStateToDatabase() {
-  const database = await openDatabase();
-
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.put({
-      key: STATE_KEY,
-      value: {
-        nextMemberId,
-        familyMembers,
-      },
-    });
-
-    request.addEventListener("success", () => {
-      resolve();
-    });
-
-    request.addEventListener("error", () => {
-      reject(request.error || new Error("数据库写入失败"));
-    });
+  await requestJson("/api/members", {
+    method: "PUT",
+    body: JSON.stringify({
+      members: familyMembers,
+    }),
   });
 }
 
 async function deleteStateFromDatabase() {
-  const database = await openDatabase();
-
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.delete(STATE_KEY);
-
-    request.addEventListener("success", () => {
-      resolve();
-    });
-
-    request.addEventListener("error", () => {
-      reject(request.error || new Error("数据库删除失败"));
-    });
+  await requestJson("/api/members", {
+    method: "PUT",
+    body: JSON.stringify({
+      members: [],
+    }),
   });
 }
 
-function saveMembersToStorage() {
-  writeStateToDatabase().catch(() => {
-    window.alert("成员信息写入数据库失败，请稍后再试。");
-  });
+async function saveMembersToStorage() {
+  try {
+    await writeStateToDatabase();
+    return true;
+  } catch (error) {
+    const protocolHint =
+      window.location.protocol === "file:"
+        ? "当前页面是直接打开的文件，请改为运行 npm start 后访问 http://127.0.0.1:3000。"
+        : "请确认本地 Node 服务正在运行，并且你访问的是 http://127.0.0.1:3000。";
+
+    window.alert(`成员信息写入数据库失败：${error.message}。${protocolHint}`);
+    return false;
+  }
 }
 
 async function loadMembersFromStorage() {
   try {
-    const parsedData = await readStateFromDatabase();
-
-    if (!parsedData) {
-      return;
-    }
+    const parsedData = await requestJson("/api/members");
 
     familyMembers.length = 0;
-    (parsedData.familyMembers || []).forEach((member) => {
+    (parsedData.members || []).forEach((member) => {
       familyMembers.push({
         parentIds: [],
         siblingIds: [],
@@ -257,11 +221,14 @@ async function loadMembersFromStorage() {
       });
     });
     nextMemberId =
-      typeof parsedData.nextMemberId === "number"
-        ? parsedData.nextMemberId
-        : familyMembers.reduce((maxId, member) => Math.max(maxId, member.id), 0) + 1;
+      familyMembers.reduce((maxId, member) => Math.max(maxId, member.id), 0) + 1;
   } catch (error) {
-    window.alert("成员数据库读取失败，当前将以空数据启动。");
+    const protocolHint =
+      window.location.protocol === "file:"
+        ? "当前页面是直接打开的文件，请改为运行 npm start 后访问 http://127.0.0.1:3000。"
+        : "请确认本地 Node 服务正在运行，并且你访问的是 http://127.0.0.1:3000。";
+
+    window.alert(`SQLite 数据库读取失败。${protocolHint}`);
   }
 }
 
@@ -778,8 +745,8 @@ clearTreeButton.addEventListener("click", () => {
 
   familyMembers.length = 0;
   nextMemberId = 1;
-  deleteStateFromDatabase().catch(() => {
-    window.alert("清空数据库失败，请稍后再试。");
+  deleteStateFromDatabase().catch((error) => {
+    window.alert(`清空数据库失败：${error.message}`);
   });
   renderEmptyTree();
   refreshRelationshipOptions();
@@ -859,7 +826,12 @@ familyForm.addEventListener("submit", async (event) => {
     }
   }
 
-  saveMembersToStorage();
+  const saved = await saveMembersToStorage();
+
+  if (!saved) {
+    return;
+  }
+
   refreshRelationshipOptions();
   renderSummary(member);
   renderTree();
