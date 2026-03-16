@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 
-const HOST = "127.0.0.1";
-const PORT = 3000;
+const HOST = process.env.HOST || "0.0.0.0";
+const PORT = Number(process.env.PORT || 3000);
 const PROJECT_ROOT = __dirname;
 const DATABASE_DIR = path.join(PROJECT_ROOT, "data");
 const DATABASE_PATH = path.join(DATABASE_DIR, "family-tree.db");
