@@ -22,7 +22,10 @@ const zoomOutButton = document.querySelector("#zoom-out");
 const zoomResetButton = document.querySelector("#zoom-reset");
 const downloadPdfButton = document.querySelector("#download-pdf");
 
-const STORAGE_KEY = "familytree-framework-members";
+const DATABASE_NAME = "familyTreeDatabase";
+const DATABASE_VERSION = 1;
+const STORE_NAME = "appState";
+const STATE_KEY = "familytree-framework-members";
 let nextMemberId = 1;
 const familyMembers = [];
 let treeZoom = 1;
@@ -145,43 +148,120 @@ function findMemberById(id) {
   return familyMembers.find((member) => member.id === id) || null;
 }
 
-function saveMembersToStorage() {
-  window.localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      nextMemberId,
-      familyMembers,
-    }),
-  );
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+
+    request.addEventListener("upgradeneeded", () => {
+      const database = request.result;
+
+      if (!database.objectStoreNames.contains(STORE_NAME)) {
+        database.createObjectStore(STORE_NAME, { keyPath: "key" });
+      }
+    });
+
+    request.addEventListener("success", () => {
+      resolve(request.result);
+    });
+
+    request.addEventListener("error", () => {
+      reject(request.error || new Error("数据库打开失败"));
+    });
+  });
 }
 
-function loadMembersFromStorage() {
-  const rawData = window.localStorage.getItem(STORAGE_KEY);
+async function readStateFromDatabase() {
+  const database = await openDatabase();
 
-  if (!rawData) {
-    return;
-  }
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, "readonly");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(STATE_KEY);
 
+    request.addEventListener("success", () => {
+      resolve(request.result?.value || null);
+    });
+
+    request.addEventListener("error", () => {
+      reject(request.error || new Error("数据库读取失败"));
+    });
+  });
+}
+
+async function writeStateToDatabase() {
+  const database = await openDatabase();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put({
+      key: STATE_KEY,
+      value: {
+        nextMemberId,
+        familyMembers,
+      },
+    });
+
+    request.addEventListener("success", () => {
+      resolve();
+    });
+
+    request.addEventListener("error", () => {
+      reject(request.error || new Error("数据库写入失败"));
+    });
+  });
+}
+
+async function deleteStateFromDatabase() {
+  const database = await openDatabase();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(STATE_KEY);
+
+    request.addEventListener("success", () => {
+      resolve();
+    });
+
+    request.addEventListener("error", () => {
+      reject(request.error || new Error("数据库删除失败"));
+    });
+  });
+}
+
+function saveMembersToStorage() {
+  writeStateToDatabase().catch(() => {
+    window.alert("成员信息写入数据库失败，请稍后再试。");
+  });
+}
+
+async function loadMembersFromStorage() {
   try {
-    const parsedData = JSON.parse(rawData);
+    const parsedData = await readStateFromDatabase();
+
+    if (!parsedData) {
+      return;
+    }
+
     familyMembers.length = 0;
     (parsedData.familyMembers || []).forEach((member) => {
-    familyMembers.push({
-      parentIds: [],
-      siblingIds: [],
-      spouseIds: [],
-      photoDataUrl: "",
-      ethnicity: "",
-      ...member,
-      photoDataUrl: normalizePhotoDataUrl(member.photoDataUrl),
-    });
+      familyMembers.push({
+        parentIds: [],
+        siblingIds: [],
+        spouseIds: [],
+        photoDataUrl: "",
+        ethnicity: "",
+        ...member,
+        photoDataUrl: normalizePhotoDataUrl(member.photoDataUrl),
+      });
     });
     nextMemberId =
       typeof parsedData.nextMemberId === "number"
         ? parsedData.nextMemberId
         : familyMembers.reduce((maxId, member) => Math.max(maxId, member.id), 0) + 1;
   } catch (error) {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.alert("成员数据库读取失败，当前将以空数据启动。");
   }
 }
 
@@ -698,7 +778,9 @@ clearTreeButton.addEventListener("click", () => {
 
   familyMembers.length = 0;
   nextMemberId = 1;
-  window.localStorage.removeItem(STORAGE_KEY);
+  deleteStateFromDatabase().catch(() => {
+    window.alert("清空数据库失败，请稍后再试。");
+  });
   renderEmptyTree();
   refreshRelationshipOptions();
   resetToCreateMode();
@@ -784,9 +866,13 @@ familyForm.addEventListener("submit", async (event) => {
   resetToCreateMode();
 });
 
-loadMembersFromStorage();
-refreshRelationshipOptions();
-renderTree();
-renderMemberList();
-updateEditBanner();
-applyZoom();
+async function initializeApp() {
+  await loadMembersFromStorage();
+  refreshRelationshipOptions();
+  renderTree();
+  renderMemberList();
+  updateEditBanner();
+  applyZoom();
+}
+
+initializeApp();
