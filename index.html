@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>家谱制作程序</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Family Tree Builder</p>
+          <h1>家谱制作程序</h1>
+          <p class="hero-copy">
+            先录入家庭成员信息，再自动生成基础树状图。这个版本是免费可部署的网页框架，后续可以继续扩展为多代家谱系统。
+          </p>
+        </div>
+        <div class="hero-card">
+          <span>当前版本</span>
+          <strong>基础框架 v1</strong>
+          <p>支持多成员连续录入、年龄自动计算，以及基础家谱树状图累计展示。</p>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel form-panel">
+          <div class="panel-heading">
+            <h2>成员信息录入</h2>
+            <p>带 * 为必填项。新增第二位起，请选择“与谁的关系”和“关系类型”，系统会自动调整树状图层级。</p>
+          </div>
+
+          <form id="family-form" class="family-form">
+            <div id="edit-banner" class="summary-card empty form-banner">
+              <p>当前为新增模式。</p>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                <span>姓名 *</span>
+                <input id="name" name="name" type="text" required placeholder="请输入姓名" />
+              </label>
+
+              <label>
+                <span>性别 *</span>
+                <select id="gender" name="gender" required>
+                  <option value="">请选择</option>
+                  <option value="男">男</option>
+                  <option value="女">女</option>
+                  <option value="其他">其他</option>
+                </select>
+              </label>
+
+              <label>
+                <span>出生年月日 *</span>
+                <input id="birthDate" name="birthDate" type="date" required />
+              </label>
+
+              <label>
+                <span>去世年月日</span>
+                <input id="deathDate" name="deathDate" type="date" />
+              </label>
+
+              <label>
+                <span>家庭地址</span>
+                <input id="address" name="address" type="text" placeholder="选填" />
+              </label>
+
+              <label>
+                <span>民族</span>
+                <input id="ethnicity" name="ethnicity" type="text" placeholder="选填，例如汉族、蒙古族" />
+              </label>
+
+              <label>
+                <span>职务</span>
+                <input id="jobTitle" name="jobTitle" type="text" placeholder="选填" />
+              </label>
+
+              <label>
+                <span>婚姻状态 *</span>
+                <select id="maritalStatus" name="maritalStatus" required>
+                  <option value="">请选择</option>
+                  <option value="未婚">未婚</option>
+                  <option value="已婚">已婚</option>
+                  <option value="离异">离异</option>
+                  <option value="丧偶">丧偶</option>
+                </select>
+              </label>
+
+              <label class="readonly-field">
+                <span>自动计算年龄</span>
+                <input id="calculatedAge" type="text" readonly placeholder="将根据日期自动计算" />
+              </label>
+
+              <label>
+                <span>照片</span>
+                <input id="photo" name="photo" type="file" accept="image/*" />
+              </label>
+            </div>
+
+            <fieldset class="spouse-fieldset">
+              <legend>配偶信息</legend>
+              <div class="form-grid">
+                <label>
+                  <span>配偶姓名</span>
+                  <input id="spouseName" name="spouseName" type="text" placeholder="选填" />
+                </label>
+
+                <label>
+                  <span>配偶出生年月日</span>
+                  <input id="spouseBirthDate" name="spouseBirthDate" type="date" />
+                </label>
+
+                <label>
+                  <span>配偶去世年月日</span>
+                  <input id="spouseDeathDate" name="spouseDeathDate" type="date" />
+                </label>
+
+                <label>
+                  <span>配偶职务</span>
+                  <input id="spouseJobTitle" name="spouseJobTitle" type="text" placeholder="选填" />
+                </label>
+
+                <label>
+                  <span>与本人婚姻状态</span>
+                  <select id="spouseMaritalStatus" name="spouseMaritalStatus">
+                    <option value="">请选择</option>
+                    <option value="已婚">已婚</option>
+                    <option value="离异">离异</option>
+                    <option value="丧偶">丧偶</option>
+                    <option value="分居">分居</option>
+                  </select>
+                </label>
+
+                <label class="readonly-field">
+                  <span>配偶自动计算年龄</span>
+                  <input id="spouseCalculatedAge" type="text" readonly placeholder="将根据配偶日期自动计算" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="spouse-fieldset">
+              <legend>关系设置</legend>
+              <div class="form-grid">
+                <label>
+                  <span>与谁建立关系</span>
+                  <select id="relatedMemberId" name="relatedMemberId">
+                    <option value="">首位成员可留空</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span>关系类型</span>
+                  <select id="relationshipType" name="relationshipType">
+                    <option value="">首位成员可留空</option>
+                    <option value="father">是对方的父亲</option>
+                    <option value="mother">是对方的母亲</option>
+                    <option value="son">是对方的儿子</option>
+                    <option value="daughter">是对方的女儿</option>
+                    <option value="sonInLaw">是对方的女婿</option>
+                    <option value="daughterInLaw">是对方的儿媳</option>
+                    <option value="brother">是对方的兄弟</option>
+                    <option value="sister">是对方的姐妹</option>
+                    <option value="spouse">是对方的配偶</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <button type="submit">保存并加入树状图</button>
+              <button type="button" id="cancel-edit" class="ghost-btn">取消编辑</button>
+              <button type="reset" class="ghost-btn">清空当前表单</button>
+              <button type="button" id="clear-tree" class="ghost-btn">清空家谱</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel preview-panel">
+          <div class="panel-heading">
+            <h2>家谱树状图预览</h2>
+            <p>支持按父亲、母亲、儿子、女儿、兄弟姐妹、女婿、儿媳、配偶等关系自动排列层级。</p>
+          </div>
+
+          <div id="summary-card" class="summary-card empty">
+            <p>暂未生成成员信息。</p>
+          </div>
+
+          <div class="search-panel">
+            <input id="search-name" type="text" placeholder="输入姓名搜索成员信息" />
+            <button type="button" id="search-button" class="ghost-btn toolbar-btn">搜索</button>
+          </div>
+
+          <div id="search-result" class="summary-card empty">
+            <p>搜索结果会显示在这里。</p>
+          </div>
+
+          <div id="member-list" class="summary-card empty">
+            <p>已保存成员会显示在这里，可直接编辑或删除。</p>
+          </div>
+
+          <div class="tree-toolbar">
+            <button type="button" id="zoom-out" class="ghost-btn toolbar-btn">缩小</button>
+            <button type="button" id="zoom-reset" class="ghost-btn toolbar-btn">100%</button>
+            <button type="button" id="zoom-in" class="ghost-btn toolbar-btn">放大</button>
+            <button type="button" id="download-pdf" class="ghost-btn toolbar-btn">导出 PDF</button>
+          </div>
+
+          <div id="tree-root" class="tree-root">
+            <div id="tree-canvas" class="tree-canvas">
+              <div class="empty-state">
+                <h3>等待生成家谱</h3>
+                <p>填完左侧信息后，这里会显示基础树状图。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
