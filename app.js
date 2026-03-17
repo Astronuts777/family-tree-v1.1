@@ -7,7 +7,6 @@ const spouseDeathDateInput = document.querySelector("#spouseDeathDate");
 const spouseAgeOutput = document.querySelector("#spouseCalculatedAge");
 const summaryCard = document.querySelector("#summary-card");
 const searchResult = document.querySelector("#search-result");
-const memberList = document.querySelector("#member-list");
 const treeRoot = document.querySelector("#tree-root");
 const treeCanvas = document.querySelector("#tree-canvas");
 const clearTreeButton = document.querySelector("#clear-tree");
@@ -402,43 +401,11 @@ function renderSummary(member) {
   `;
 }
 
-function renderMemberList() {
-  if (!familyMembers.length) {
-    memberList.className = "summary-card empty";
-    memberList.innerHTML = "<p>已保存成员会显示在这里，可直接编辑或删除。</p>";
-    return;
-  }
-
-  memberList.className = "summary-card";
-  memberList.innerHTML = `
-    <h3>成员管理</h3>
-    <div class="member-list-grid">
-      ${familyMembers
-        .map(
-          (member) => `
-            <div class="member-list-item">
-              <div>
-                <p><strong>${escapeHtml(member.name)}</strong></p>
-                <p>${escapeHtml(member.gender)} ｜ ${escapeHtml(member.calculatedAge)} ｜ ${escapeHtml(member.ethnicity || "未填写民族")}</p>
-              </div>
-              <div class="member-list-actions">
-                <button type="button" class="ghost-btn small-btn" data-action="edit" data-member-id="${member.id}">编辑</button>
-                <button type="button" class="ghost-btn small-btn" data-action="delete" data-member-id="${member.id}">删除</button>
-              </div>
-            </div>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
-}
-
 function renderEmptyTree() {
   summaryCard.className = "summary-card empty";
   summaryCard.innerHTML = "<p>暂未生成成员信息。</p>";
   searchResult.className = "summary-card empty";
-  searchResult.innerHTML = "<p>搜索结果会显示在这里。</p>";
-  renderMemberList();
+  searchResult.innerHTML = "<p>搜索结果会显示在这里，可直接编辑或删除。</p>";
   treeCanvas.innerHTML = `
     <div class="empty-state">
       <h3>等待生成家谱</h3>
@@ -539,7 +506,6 @@ function renderTree() {
       </ul>
     </div>
   `;
-  renderMemberList();
 }
 
 function connectRelationship(newMember, relatedMemberId, relationshipType) {
@@ -671,6 +637,10 @@ function renderSearchResult(member) {
     <p>出生日期：${escapeHtml(member.birthDate)}${member.deathDate ? ` ｜ 去世日期：${escapeHtml(member.deathDate)}` : " ｜ 当前状态：健在"}</p>
     <p>地址：${escapeHtml(member.address || "未填写")} ｜ 职务：${escapeHtml(member.jobTitle || "未填写")}</p>
     <p>婚姻状态：${escapeHtml(member.maritalStatus)}</p>
+    <div class="search-result-actions">
+      <button type="button" class="ghost-btn small-btn" data-action="edit" data-member-id="${member.id}">编辑</button>
+      <button type="button" class="ghost-btn small-btn" data-action="delete" data-member-id="${member.id}">删除</button>
+    </div>
   `;
 }
 
@@ -773,7 +743,7 @@ zoomResetButton.addEventListener("click", () => {
 });
 downloadPdfButton.addEventListener("click", downloadTreeAsPdf);
 cancelEditButton.addEventListener("click", resetToCreateMode);
-memberList.addEventListener("click", (event) => {
+searchResult.addEventListener("click", (event) => {
   const target = event.target;
 
   if (!(target instanceof HTMLElement)) {
@@ -932,7 +902,6 @@ async function initializeApp() {
   await loadMembersFromStorage();
   refreshRelationshipOptions();
   renderTree();
-  renderMemberList();
   updateEditBanner();
   applyZoom();
 }
