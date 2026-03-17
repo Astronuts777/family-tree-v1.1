@@ -22,18 +22,42 @@ const zoomOutButton = document.querySelector("#zoom-out");
 const zoomResetButton = document.querySelector("#zoom-reset");
 const downloadPdfButton = document.querySelector("#download-pdf");
 
+const LOCAL_STORAGE_KEY = "family-tree-github-pages-state";
 let nextMemberId = 1;
 const familyMembers = [];
 let treeZoom = 1;
 let editingMemberId = null;
+let storageMode = "api";
 
-function calculateAge(birthDateValue, deathDateValue = "") {
-  if (!birthDateValue) {
+function isStaticHostingMode() {
+  return window.location.hostname.endsWith("github.io") || window.location.protocol === "file:";
+}
+
+function normalizeDateValue(rawValue) {
+  if (!rawValue) {
     return "";
   }
 
-  const birthDate = new Date(birthDateValue);
-  const endDate = deathDateValue ? new Date(deathDateValue) : new Date();
+  const trimmedValue = String(rawValue).trim().replaceAll("/", "-");
+  const digitsOnly = trimmedValue.replace(/\D/g, "").slice(0, 8);
+
+  if (digitsOnly.length === 8) {
+    return `${digitsOnly.slice(0, 4)}-${digitsOnly.slice(4, 6)}-${digitsOnly.slice(6, 8)}`;
+  }
+
+  return trimmedValue.slice(0, 10);
+}
+
+function calculateAge(birthDateValue, deathDateValue = "") {
+  const normalizedBirthDateValue = normalizeDateValue(birthDateValue);
+  const normalizedDeathDateValue = normalizeDateValue(deathDateValue);
+
+  if (!normalizedBirthDateValue) {
+    return "";
+  }
+
+  const birthDate = new Date(normalizedBirthDateValue);
+  const endDate = normalizedDeathDateValue ? new Date(normalizedDeathDateValue) : new Date();
 
   if (Number.isNaN(birthDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < birthDate) {
     return "日期无效";
@@ -51,11 +75,15 @@ function calculateAge(birthDateValue, deathDateValue = "") {
 }
 
 function updateCalculatedAge() {
+  birthDateInput.value = normalizeDateValue(birthDateInput.value);
+  deathDateInput.value = normalizeDateValue(deathDateInput.value);
   const age = calculateAge(birthDateInput.value, deathDateInput.value);
   ageOutput.value = age || "";
 }
 
 function updateSpouseCalculatedAge() {
+  spouseBirthDateInput.value = normalizeDateValue(spouseBirthDateInput.value);
+  spouseDeathDateInput.value = normalizeDateValue(spouseDeathDateInput.value);
   const age = calculateAge(spouseBirthDateInput.value, spouseDeathDateInput.value);
   spouseAgeOutput.value = age || "";
 }
@@ -172,6 +200,16 @@ async function requestJson(url, options = {}) {
 }
 
 async function writeStateToDatabase() {
+  if (storageMode === "local") {
+    window.localStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify({
+        members: familyMembers,
+      }),
+    );
+    return;
+  }
+
   await requestJson("/api/members", {
     method: "PUT",
     body: JSON.stringify({
@@ -181,6 +219,11 @@ async function writeStateToDatabase() {
 }
 
 async function deleteStateFromDatabase() {
+  if (storageMode === "local") {
+    window.localStorage.removeItem(LOCAL_STORAGE_KEY);
+    return;
+  }
+
   await requestJson("/api/members", {
     method: "PUT",
     body: JSON.stringify({
@@ -206,6 +249,38 @@ async function saveMembersToStorage() {
 
 async function loadMembersFromStorage() {
   try {
+    if (isStaticHostingMode()) {
+      storageMode = "local";
+      const localPayload = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+
+      if (!localPayload) {
+        familyMembers.length = 0;
+        nextMemberId = 1;
+        return;
+      }
+
+      const parsedLocalPayload = JSON.parse(localPayload);
+      familyMembers.length = 0;
+      (parsedLocalPayload.members || []).forEach((member) => {
+        familyMembers.push({
+          parentIds: [],
+          siblingIds: [],
+          spouseIds: [],
+          photoDataUrl: "",
+          ethnicity: "",
+          ...member,
+          birthDate: normalizeDateValue(member.birthDate),
+          deathDate: normalizeDateValue(member.deathDate),
+          spouseBirthDate: normalizeDateValue(member.spouseBirthDate),
+          spouseDeathDate: normalizeDateValue(member.spouseDeathDate),
+          photoDataUrl: normalizePhotoDataUrl(member.photoDataUrl),
+        });
+      });
+      nextMemberId = familyMembers.reduce((maxId, member) => Math.max(maxId, member.id), 0) + 1;
+      return;
+    }
+
+    storageMode = "api";
     const parsedData = await requestJson("/api/members");
 
     familyMembers.length = 0;
@@ -217,18 +292,18 @@ async function loadMembersFromStorage() {
         photoDataUrl: "",
         ethnicity: "",
         ...member,
+        birthDate: normalizeDateValue(member.birthDate),
+        deathDate: normalizeDateValue(member.deathDate),
+        spouseBirthDate: normalizeDateValue(member.spouseBirthDate),
+        spouseDeathDate: normalizeDateValue(member.spouseDeathDate),
         photoDataUrl: normalizePhotoDataUrl(member.photoDataUrl),
       });
     });
     nextMemberId =
       familyMembers.reduce((maxId, member) => Math.max(maxId, member.id), 0) + 1;
   } catch (error) {
-    const protocolHint =
-      window.location.protocol === "file:"
-        ? "当前页面是直接打开的文件，请改为运行 npm start 后访问 http://127.0.0.1:3000。"
-        : "请确认本地 Node 服务正在运行，并且你访问的是 http://127.0.0.1:3000。";
-
-    window.alert(`SQLite 数据库读取失败。${protocolHint}`);
+    storageMode = "local";
+    window.alert("当前环境不支持后端数据库，已自动切换为浏览器本地保存模式。");
   }
 }
 
@@ -505,7 +580,7 @@ function changeZoom(delta) {
 function updateEditBanner() {
   if (editingMemberId === null) {
     editBanner.className = "summary-card empty form-banner";
-    editBanner.innerHTML = "<p>当前为新增模式。</p>";
+    editBanner.innerHTML = `<p>当前为新增模式。数据保存方式：<strong>${storageMode === "local" ? "浏览器本地保存" : "服务器数据库保存"}</strong>。</p>`;
     return;
   }
 
@@ -668,6 +743,14 @@ birthDateInput.addEventListener("change", updateCalculatedAge);
 deathDateInput.addEventListener("change", updateCalculatedAge);
 spouseBirthDateInput.addEventListener("change", updateSpouseCalculatedAge);
 spouseDeathDateInput.addEventListener("change", updateSpouseCalculatedAge);
+[birthDateInput, deathDateInput, spouseBirthDateInput, spouseDeathDateInput].forEach((input) => {
+  input.addEventListener("input", () => {
+    input.value = normalizeDateValue(input.value);
+  });
+  input.addEventListener("blur", () => {
+    input.value = normalizeDateValue(input.value);
+  });
+});
 searchButton.addEventListener("click", handleSearch);
 searchNameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
@@ -784,16 +867,16 @@ familyForm.addEventListener("submit", async (event) => {
     id: existingMember ? existingMember.id : nextMemberId++,
     name: formData.get("name")?.toString().trim() || "",
     gender: formData.get("gender")?.toString() || "",
-    birthDate: formData.get("birthDate")?.toString() || "",
-    deathDate: formData.get("deathDate")?.toString() || "",
+    birthDate: normalizeDateValue(formData.get("birthDate")?.toString() || ""),
+    deathDate: normalizeDateValue(formData.get("deathDate")?.toString() || ""),
     address: formData.get("address")?.toString().trim() || "",
     ethnicity: formData.get("ethnicity")?.toString().trim() || "",
     jobTitle: formData.get("jobTitle")?.toString().trim() || "",
     maritalStatus: formData.get("maritalStatus")?.toString() || "",
     photoDataUrl,
     spouseName: formData.get("spouseName")?.toString().trim() || "",
-    spouseBirthDate: formData.get("spouseBirthDate")?.toString() || "",
-    spouseDeathDate: formData.get("spouseDeathDate")?.toString() || "",
+    spouseBirthDate: normalizeDateValue(formData.get("spouseBirthDate")?.toString() || ""),
+    spouseDeathDate: normalizeDateValue(formData.get("spouseDeathDate")?.toString() || ""),
     spouseJobTitle: formData.get("spouseJobTitle")?.toString().trim() || "",
     spouseMaritalStatus: formData.get("spouseMaritalStatus")?.toString() || "",
     spouseCalculatedAge: spouseAgeOutput.value,
