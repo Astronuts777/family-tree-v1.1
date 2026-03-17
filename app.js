@@ -38,14 +38,21 @@ function normalizeDateValue(rawValue) {
     return "";
   }
 
-  const trimmedValue = String(rawValue).trim().replaceAll("/", "-");
-  const digitsOnly = trimmedValue.replace(/\D/g, "").slice(0, 8);
+  const digitsOnly = String(rawValue).replace(/\D/g, "").slice(0, 8);
 
-  if (digitsOnly.length === 8) {
-    return `${digitsOnly.slice(0, 4)}-${digitsOnly.slice(4, 6)}-${digitsOnly.slice(6, 8)}`;
+  if (!digitsOnly) {
+    return "";
   }
 
-  return trimmedValue.slice(0, 10);
+  if (digitsOnly.length <= 4) {
+    return digitsOnly;
+  }
+
+  if (digitsOnly.length <= 6) {
+    return `${digitsOnly.slice(0, 4)}-${digitsOnly.slice(4)}`;
+  }
+
+  return `${digitsOnly.slice(0, 4)}-${digitsOnly.slice(4, 6)}-${digitsOnly.slice(6)}`;
 }
 
 function calculateAge(birthDateValue, deathDateValue = "") {
